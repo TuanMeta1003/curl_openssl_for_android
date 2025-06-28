@@ -9,7 +9,7 @@ on:
 
 env:
   ANDROID_TARGET_API: "21"
-  ANDROID_NDK_VERSION: "r27c"
+  ANDROID_NDK_VERSION: "r24"
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   ABIS: "armeabi-v7a arm64-v8a x86 x86_64"
 
