@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ndk_version:
-        description: 'Android NDK version (e.g., r17, r24)'
+        description: 'Android NDK version (e.g., r24, r28)'
         required: false
         default: 'r24'
   schedule:
