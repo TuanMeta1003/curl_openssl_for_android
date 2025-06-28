@@ -2,12 +2,17 @@ name: Android Build and Release
 
 on:
   workflow_dispatch:
+    inputs:
+      ndk_version:
+        description: 'Android NDK version (e.g., r17, r24)'
+        required: false
+        default: 'r24'
   schedule:
     - cron: '0 0 * * *'
 
 env:
   ANDROID_TARGET_API: "21"
-  ANDROID_NDK_VERSION: "r24"
+  ANDROID_NDK_VERSION: ${{ github.event.inputs.ndk_version || 'r24' }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   ABIS: "armeabi-v7a arm64-v8a x86 x86_64"
 
@@ -161,7 +166,7 @@ jobs:
         id: date
         run: |
           echo "release_date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
-          
+
       - name: Create organized directory structure
         run: |
           mkdir -p Output/{curl,openssl}/{arm64-v8a,armeabi-v7a,x86,x86_64}/{include,lib}
@@ -169,7 +174,7 @@ jobs:
           find artifacts -type f | sort
           
           for ABI in $ABIS; do
-            OPENSSL_ARTIFACT=$(find artifacts -name "OpenSSL_*_${ABI}.tar.gz" | head -n 1)
+            OPENSSL_ARTIFACT=$(find artifacts -name “OpenSSL_*_${ABI}.tar.gz” | head -n 1)
             
             if [ -n "$OPENSSL_ARTIFACT" ] && [ -f "$OPENSSL_ARTIFACT" ]; then
               mkdir -p tmp_openssl_${ABI}
@@ -222,8 +227,13 @@ jobs:
       - name: Create consolidated release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: release-openssl${{ needs.get_versions.outputs.openssl_version }}-curl${{ needs.get_versions.outputs.curl_version }}
+          tag_name: release-openssl${{ needs.get_versions.outputs.openssl_version }}-curl${{ needs.get_versions.outputs.curl_version }}-ndk${{ env.ANDROID_NDK_VERSION }}
           name: >-
-            OpenSSL ${{ needs.get_versions.outputs.openssl_version }} & cURL ${{ needs.get_versions.outputs.curl_version }} Android Builds
-            (Updated ${{ steps.date.outputs.release_date }})
+            OpenSSL ${{ needs.get_versions.outputs.openssl_version }} & cURL ${{ needs.get_versions.outputs.curl_version }} Android Builds (NDK ${{ env.ANDROID_NDK_VERSION }}, Updated ${{ steps.date.outputs.release_date }})
           files: Output.zip
+
+      - name: Tag as latest for NDK r24
+        if: env.ANDROID_NDK_VERSION == 'r24'
+        run: |
+          git tag -f latest
+          git push origin latest --force
