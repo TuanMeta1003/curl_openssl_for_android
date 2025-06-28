@@ -5,12 +5,14 @@ on:
     branches: [ master ]
   workflow_dispatch:
   schedule:
-    # Run daily at midnight UTC
     - cron: '0 0 * * *'
 
-# get dynamic versions from upstream
 env:
+  ANDROID_TARGET_API: "21"
+  ANDROID_NDK_VERSION: "r27c"
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  ABIS: "armeabi-v7a arm64-v8a x86 x86_64"
+
 jobs:
   get_versions:
     name: Fetch Latest Versions
@@ -44,22 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - ANDROID_TARGET_ABI: armeabi-v7a
-            ANDROID_TARGET_API: "21"
-            ANDROID_NDK: r27c
-          - ANDROID_TARGET_ABI: arm64-v8a
-            ANDROID_TARGET_API: "21"
-            ANDROID_NDK: r27c
-          - ANDROID_TARGET_ABI: riscv64
-            ANDROID_TARGET_API: "35"
-            ANDROID_NDK: r27c
-          - ANDROID_TARGET_ABI: x86
-            ANDROID_TARGET_API: "21"
-            ANDROID_NDK: r27c
-          - ANDROID_TARGET_ABI: x86_64
-            ANDROID_TARGET_API: "21"
-            ANDROID_NDK: r27c
+        ANDROID_TARGET_ABI: [armeabi-v7a, arm64-v8a, x86, x86_64]
     env:
       OPENSSL_VERSION: ${{ needs.get_versions.outputs.openssl_version }}
     steps:
@@ -71,9 +58,9 @@ jobs:
 
       - name: Download Android NDK
         run: |
-          aria2c -q -o android-ndk-${{ matrix.ANDROID_NDK }}.zip \
-            https://dl.google.com/android/repository/android-ndk-${{ matrix.ANDROID_NDK }}-linux.zip
-          unzip -q android-ndk-${{ matrix.ANDROID_NDK }}.zip
+          aria2c -q -o android-ndk-${{ env.ANDROID_NDK_VERSION }}.zip \
+            https://dl.google.com/android/repository/android-ndk-${{ env.ANDROID_NDK_VERSION }}-linux.zip
+          unzip -q android-ndk-${{ env.ANDROID_NDK_VERSION }}.zip
 
       - name: Download OpenSSL
         run: |
@@ -84,10 +71,10 @@ jobs:
       - name: Build OpenSSL
         run: |
           bash openssl_build_new.sh \
-            ${{ matrix.ANDROID_TARGET_API }} \
+            ${{ env.ANDROID_TARGET_API }} \
             ${{ matrix.ANDROID_TARGET_ABI }} \
             ${{ env.OPENSSL_VERSION }} \
-            ${{ matrix.ANDROID_NDK }}
+            ${{ env.ANDROID_NDK_VERSION }}
 
       - name: Package OpenSSL artifact
         run: |
@@ -107,22 +94,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - ANDROID_TARGET_ABI: armeabi-v7a
-            ANDROID_TARGET_API: "21"
-            ANDROID_NDK: r27c
-          - ANDROID_TARGET_ABI: arm64-v8a
-            ANDROID_TARGET_API: "21"
-            ANDROID_NDK: r27c
-          - ANDROID_TARGET_ABI: riscv64
-            ANDROID_TARGET_API: "35"
-            ANDROID_NDK: r27c
-          - ANDROID_TARGET_ABI: x86
-            ANDROID_TARGET_API: "21"
-            ANDROID_NDK: r27c
-          - ANDROID_TARGET_ABI: x86_64
-            ANDROID_TARGET_API: "21"
-            ANDROID_NDK: r27c
+        ANDROID_TARGET_ABI: [armeabi-v7a, arm64-v8a, x86, x86_64]
     env:
       CURL_VERSION: ${{ needs.get_versions.outputs.curl_version }}
       OPENSSL_VERSION: ${{ needs.get_versions.outputs.openssl_version }}
@@ -135,9 +107,9 @@ jobs:
 
       - name: Download Android NDK
         run: |
-          aria2c -q -o android-ndk-${{ matrix.ANDROID_NDK }}.zip \
-            https://dl.google.com/android/repository/android-ndk-${{ matrix.ANDROID_NDK }}-linux.zip
-          unzip -q android-ndk-${{ matrix.ANDROID_NDK }}.zip
+          aria2c -q -o android-ndk-${{ env.ANDROID_NDK_VERSION }}.zip \
+            https://dl.google.com/android/repository/android-ndk-${{ env.ANDROID_NDK_VERSION }}-linux.zip
+          unzip -q android-ndk-${{ env.ANDROID_NDK_VERSION }}.zip
 
       - name: Download cURL
         run: |
@@ -159,10 +131,10 @@ jobs:
       - name: Build cURL with SSL
         run: |
           bash curl_build.sh \
-            ${{ matrix.ANDROID_TARGET_API }} \
+            ${{ env.ANDROID_TARGET_API }} \
             ${{ matrix.ANDROID_TARGET_ABI }} \
             ${{ env.CURL_VERSION }} \
-            ${{ matrix.ANDROID_NDK }} \
+            ${{ env.ANDROID_NDK_VERSION }} \
             ${{ env.OPENSSL_VERSION }}
 
       - name: Package cURL artifact
@@ -194,30 +166,17 @@ jobs:
           
       - name: Create organized directory structure
         run: |
-          # Create the organized directory structure
-          mkdir -p Output/{curl,openssl}/{arm64-v8a,armeabi-v7a,x86,x86_64,riscv64}/{include,lib}
+          mkdir -p Output/{curl,openssl}/{arm64-v8a,armeabi-v7a,x86,x86_64}/{include,lib}
           
-          # Debug: List downloaded artifacts
           find artifacts -type f | sort
           
-          # Process OpenSSL artifacts
-          for ABI in arm64-v8a armeabi-v7a x86 x86_64 riscv64; do
-            # Find the OpenSSL artifact for this ABI
+          for ABI in $ABIS; do
             OPENSSL_ARTIFACT=$(find artifacts -name "OpenSSL_*_${ABI}.tar.gz" | head -n 1)
             
             if [ -n "$OPENSSL_ARTIFACT" ] && [ -f "$OPENSSL_ARTIFACT" ]; then
-              echo "Processing OpenSSL for ${ABI} from $OPENSSL_ARTIFACT"
-              
-              # Create temp directory for extraction
               mkdir -p tmp_openssl_${ABI}
-              
-              # Extract to temp directory
               tar -xzf "$OPENSSL_ARTIFACT" -C tmp_openssl_${ABI}
               
-              # Debug: Show extracted content
-              find tmp_openssl_${ABI} -type d | sort
-              
-              # Copy to organized structure - handle include and lib directly
               if [ -d "tmp_openssl_${ABI}/include" ]; then
                 cp -r tmp_openssl_${ABI}/include/* "Output/openssl/${ABI}/include/" || true
               fi
@@ -226,31 +185,19 @@ jobs:
                 cp -r tmp_openssl_${ABI}/lib/* "Output/openssl/${ABI}/lib/" || true
               fi
               
-              # Clean up temp directory
               rm -rf tmp_openssl_${ABI}
             else
               echo "⚠️ OpenSSL artifact for ${ABI} not found"
             fi
           done
           
-          # Process cURL artifacts
-          for ABI in arm64-v8a armeabi-v7a x86 x86_64 riscv64; do
-            # Find the curl artifact for this ABI
+          for ABI in $ABIS; do
             CURL_ARTIFACT=$(find artifacts -name "curl_*_${ABI}.tar.gz" | head -n 1)
             
             if [ -n "$CURL_ARTIFACT" ] && [ -f "$CURL_ARTIFACT" ]; then
-              echo "Processing cURL for ${ABI} from $CURL_ARTIFACT"
-              
-              # Create temp directory for extraction
               mkdir -p tmp_curl_${ABI}
-              
-              # Extract to temp directory
               tar -xzf "$CURL_ARTIFACT" -C tmp_curl_${ABI}
               
-              # Debug: Show extracted content
-              find tmp_curl_${ABI} -type d | sort
-              
-              # Copy to organized structure - handle include and lib directly
               if [ -d "tmp_curl_${ABI}/include" ]; then
                 cp -r tmp_curl_${ABI}/include/* "Output/curl/${ABI}/include/" || true
               fi
@@ -259,23 +206,19 @@ jobs:
                 cp -r tmp_curl_${ABI}/lib/* "Output/curl/${ABI}/lib/" || true
               fi
               
-              # Clean up temp directory
               rm -rf tmp_curl_${ABI}
             else
               echo "⚠️ cURL artifact for ${ABI} not found"
             fi
           done
           
-          # Debug: Show final structure before zipping
           echo "Final directory structure:"
           find Output -type f | sort
           
-          # Create the final zip file
           cd Output
           zip -r ../Output.zip .
           cd ..
           
-          # List contents to verify structure
           unzip -l Output.zip
 
       - name: Create consolidated release
