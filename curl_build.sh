@@ -38,31 +38,6 @@ else
     export nproc="nproc"
 fi
 
-function embed_pem() {
-    echo "Embedding cacert.pem..."
-    HEADER="${CURL_SRC}/lib/embedded_cacert.h"
-
-    echo 'static const char embedded_cacert[] =' > $HEADER
-    awk '{print "\"" $0 "\\n\""}' ${PEM_FILE} >> $HEADER
-    echo ';' >> $HEADER
-
-    echo "embedded_cacert.h generated."
-
-    echo "Patching cURL source..."
-
-    PATCH_FILE="${CURL_SRC}/lib/vtls/openssl.c"
-
-    if ! grep -q "embedded_cacert.h" "$PATCH_FILE"; then
-        sed -i '/#include "urldata.h"/a #include "embedded_cacert.h"' "$PATCH_FILE"
-
-        sed -i 's|if(data->set.str\[STRING_SSL_CAFILE\]) {|if(1) {|' "$PATCH_FILE"
-
-        sed -i '/SSL_CTX_load_verify_locations/s|data->set.str\[STRING_SSL_CAFILE\]|NULL|' "$PATCH_FILE"
-
-        sed -i "/SSL_CTX_load_verify_locations/i \ \ BIO* bio = BIO_new_mem_buf(embedded_cacert, -1);\n  X509_STORE* store = SSL_CTX_get_cert_store(backend->ctx);\n  if(!store || !bio) return CURLE_SSL_CERTPROBLEM;\n  while(1) {\n    X509* cert = PEM_read_bio_X509(bio, NULL, 0, NULL);\n    if(!cert) break;\n    X509_STORE_add_cert(store, cert);\n    X509_free(cert);\n  }\n  BIO_free(bio);" "$PATCH_FILE"
-    fi
-}
-
 function build() {
     mkdir -p ${OUTPUT_PATH}
     cd ${CURL_SRC}
@@ -111,6 +86,5 @@ function clean() {
     rm -rf ${OUTPUT_PATH}/bin ${OUTPUT_PATH}/share ${OUTPUT_PATH}/lib/pkgconfig
 }
 
-embed_pem
 build
 clean
