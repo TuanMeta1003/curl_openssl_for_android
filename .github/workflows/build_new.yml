@@ -8,7 +8,7 @@ on:
         required: false
         default: 'r24'
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 17 * * *' # 0h sáng UTC+7
 
 env:
   ANDROID_TARGET_API: "21"
